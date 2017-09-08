@@ -4,7 +4,7 @@ metadata:
   labels:
     name: dask-worker
     app: dask
-  name: dask-worker
+  name: dask-worker-v2
 spec:
   replicas: {{workers.count}}
   selector:
@@ -26,6 +26,14 @@ spec:
             requests:
               cpu: {{workers.cpus_per_worker}}
               memory: {{workers.memory_per_worker}}
+          env:
+          {% for secret_key in secrets.keys() %}
+            - name: {{secret_key}}
+              valueFrom:
+                secretKeyRef:
+                  name: cluster-secrets
+                  key: {{secret_key}}
+          {% endfor %}
           imagePullPolicy: Always
           securityContext:
             runAsUser: 1000

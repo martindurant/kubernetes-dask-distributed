@@ -12,6 +12,7 @@ import sys
 import time
 import traceback
 import webbrowser
+from glob import glob
 
 from .config import setup_logging
 from .utils import (call, check_output, required_commands, get_conf, makedirs,
@@ -96,7 +97,14 @@ def create(ctx, name, settings_file, set, nowait):
     logger.info("Copying template config to %s" % par)
     makedirs(par, exist_ok=True)
     write_templates(render_templates(conf, par))
-    call("kubectl create -f {0}  --save-config".format(par))
+    config_files = glob(os.path.join(par, '*.yaml'))
+
+    # create secrets first then rest of the components
+    if len(conf['secrets']):
+        call("kubectl create -f {0}/secrets.yaml  --save-config".format(par))
+        config_files.remove('{0}/secrets.yaml'.format(par))
+    for config_path in config_files:
+        call("kubectl create -f {0}  --save-config".format(config_path))
     if not nowait:
         wait_until_ready(name, context)
         print_info(name, context)

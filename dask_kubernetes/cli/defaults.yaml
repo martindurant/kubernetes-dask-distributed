@@ -28,3 +28,5 @@ workers:
   mem_factor: 0.95             # memory limit option to pass to worker will be this multiplied by the container limit;
                                # slightly less than one, so worker should not exceed available memory in the container
   image: mdurant/dask-kubernetes:latest  # docker image of each worker's environment
+# secrets:
+#   KEY: VALUE

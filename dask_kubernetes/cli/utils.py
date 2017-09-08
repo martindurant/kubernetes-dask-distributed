@@ -6,7 +6,9 @@ import logging
 import os
 import subprocess
 import sys
+
 import yaml
+from base64 import b64encode
 
 import six
 
@@ -126,6 +128,16 @@ def get_conf(settings, args=None):
         conf['workers']['memory_per_worker']))
     conf['workers']['cpus_per_worker2'] = int(ceil(
         float(conf['workers']['cpus_per_worker'])))
+
+    # encode secrets with base64
+    conf['secrets'] = conf.get('secrets', None) or {}
+    for key, secret in conf['secrets'].items():
+        if secret.startswith('$'):
+            secret = check_output('echo "{}"'.format(secret))
+            if secret == '':
+                logger.warning('Secret with key {} evaluated '
+                               'to empty string'.format(key))
+        conf['secrets'][key] = b64encode(secret.encode()).decode()
     return conf
 
 
