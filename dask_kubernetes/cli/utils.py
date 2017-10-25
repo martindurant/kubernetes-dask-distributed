@@ -1,5 +1,6 @@
 import collections
 import functools
+import json
 from math import ceil
 import jinja2
 import logging
@@ -132,13 +133,27 @@ def get_conf(settings, args=None):
     # encode secrets with base64
     conf['secrets'] = conf.get('secrets', None) or {}
     for key, secret in conf['secrets'].items():
-        if secret.startswith('$'):
-            secret = check_output('echo "{}"'.format(secret))
-            if secret == '':
-                logger.warning('Secret with key {} evaluated '
-                               'to empty string'.format(key))
+        secret = maybe_render_from_env(key, secret)
         conf['secrets'][key] = b64encode(secret.encode()).decode()
+
+    # default value for regsecret
+    conf['regsecret'] = conf.get('regsecret', None)
+    if conf['regsecret'] is not None:
+        allowed_regsecret_keys = {'username', 'password', 'server', 'email'}
+        regsecret_keys = set(conf['regsecret'].keys)
+        if allowed_regsecret_keys != regsecret_keys:
+            raise ValueError('Forbidden additional keys in regsecret: {}'
+                             .format(allowed_regsecret_keys - regsecret_keys))
     return conf
+
+
+def maybe_render_from_env(key, secret):
+    if secret.startswith('$'):
+        secret = check_output('echo "{}"'.format(secret))
+        if secret == '':
+            logger.warning('Secret with key {} evaluated '
+                           'to empty string'.format(key))
+    return secret
 
 
 def render_templates(conf, par):

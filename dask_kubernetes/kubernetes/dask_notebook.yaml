@@ -18,6 +18,10 @@ spec:
       containers:
         - name: jupyter-notebook
           image: {{jupyter.image}}
+          {% if regsecret != None %}
+          imagePullSecrets:
+          - name: regsecret
+          {% endif %}
           args: ["bash", "/work/config/start.sh"]
           ports:
             - name: http

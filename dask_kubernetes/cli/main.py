@@ -16,7 +16,7 @@ from glob import glob
 
 from .config import setup_logging
 from .utils import (call, check_output, required_commands, get_conf, makedirs,
-                    render_templates, write_templates, pardir, load_config)
+                    render_templates, write_templates, pardir, load_config, maybe_render_from_env)
 
 
 logger = logging.getLogger(__name__)
@@ -103,6 +103,15 @@ def create(ctx, name, settings_file, set, nowait):
     if len(conf['secrets']):
         call("kubectl create -f {0}/secrets.yaml  --save-config".format(par))
         config_files.remove('{0}/secrets.yaml'.format(par))
+    if conf['regsecret'] is not None:
+        call("kubectl create secret docker-registry regsecret"
+             "--docker-server {server}"
+             "--docker-username {username}"
+             "--docker-password {password}"
+             "--docker-email {email}".format(
+                **{k: maybe_render_from_env(k,v)
+                   for k,v in conf['container-registry'].items()})
+        )
     for config_path in config_files:
         call("kubectl create -f {0}  --save-config".format(config_path))
     if not nowait:

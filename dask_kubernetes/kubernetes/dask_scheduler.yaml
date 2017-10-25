@@ -18,6 +18,10 @@ spec:
       containers:
         - name: dask-scheduler
           image: {{scheduler.image}}
+          {% if regsecret != None %}
+          imagePullSecrets:
+          - name: regsecret
+          {% endif %}
           args: ["dask-scheduler"]
           ports:
           - name: rpc
