@@ -29,10 +29,10 @@ workers:
                                # slightly less than one, so worker should not exceed available memory in the container
   image: mdurant/dask-kubernetes:latest  # docker image of each worker's environment
 
-regsecret:
-  server: dockerhub.com
-  username: kayibal
-  password: 1234test
-  email: alan.f.hoeng@gmail.com
+# regsecret:
+#   server: https://index.docker.io/v1/
+#   username: $DOCKER_USER
+#   password: $DOCKER_PW
+#   email: user@domain.com
 # secrets:
 #   KEY: VALUE

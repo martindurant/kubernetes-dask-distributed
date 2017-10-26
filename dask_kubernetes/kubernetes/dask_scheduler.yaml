@@ -18,10 +18,6 @@ spec:
       containers:
         - name: dask-scheduler
           image: {{scheduler.image}}
-          {% if regsecret != None %}
-          imagePullSecrets:
-          - name: regsecret
-          {% endif %}
           args: ["dask-scheduler"]
           ports:
           - name: rpc
@@ -37,5 +33,9 @@ spec:
               cpu: {{scheduler.cpus}}
               memory: {{scheduler.memory}}
           imagePullPolicy: Always
+    {% if regsecret != None %}
+      imagePullSecrets:
+      - name: regsecret
+    {% endif %}
       nodeSelector:
         dask_main: "thisone"

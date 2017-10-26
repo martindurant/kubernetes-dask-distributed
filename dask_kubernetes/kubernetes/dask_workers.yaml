@@ -22,10 +22,6 @@ spec:
                  "{{workers.cpus_per_worker2}}", "--memory-limit",
                  "{{workers.memory_per_worker2}}", "--interface",
                  "eth0"]
-          {% if regsecret != None %}
-          imagePullSecrets:
-          - name: regsecret
-          {% endif %}
           resources:
             requests:
               cpu: {{workers.cpus_per_worker}}
@@ -42,3 +38,7 @@ spec:
           securityContext:
             runAsUser: 1000
           workingDir: /work
+    {% if regsecret != None %}
+      imagePullSecrets:
+      - name: regsecret
+    {% endif %}

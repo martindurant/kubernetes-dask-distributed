@@ -1,4 +1,5 @@
 import collections
+import copy
 import functools
 import json
 from math import ceil
@@ -140,7 +141,7 @@ def get_conf(settings, args=None):
     conf['regsecret'] = conf.get('regsecret', None)
     if conf['regsecret'] is not None:
         allowed_regsecret_keys = {'username', 'password', 'server', 'email'}
-        regsecret_keys = set(conf['regsecret'].keys)
+        regsecret_keys = set(conf['regsecret'].keys())
         if allowed_regsecret_keys != regsecret_keys:
             raise ValueError('Forbidden additional keys in regsecret: {}'
                              .format(allowed_regsecret_keys - regsecret_keys))
@@ -149,11 +150,28 @@ def get_conf(settings, args=None):
 
 def maybe_render_from_env(key, secret):
     if secret.startswith('$'):
-        secret = check_output('echo "{}"'.format(secret))
+        secret = check_output('echo "{}"'.format(secret)).strip()
         if secret == '':
             logger.warning('Secret with key {} evaluated '
                            'to empty string'.format(key))
     return secret
+
+
+def obfuscate(val):
+    return val[:2] + ('*' * (len(val)-2))
+
+
+def obfuscate_secrets(conf):
+    # don't sensitive show regsecrets in config
+    conf = copy.deepcopy(conf)
+    if 'regsecret' in conf:
+        conf['regsecret']['username'] = obfuscate(conf['regsecret']['username'])
+        conf['regsecret']['password'] = obfuscate(conf['regsecret']['password'])
+    if 'secrets' in conf:
+        # don't show secrets
+        for k, v in conf['secrets'].items():
+            conf['secrets'][k] = obfuscate(v)
+    return conf
 
 
 def render_templates(conf, par):
@@ -172,7 +190,8 @@ def render_templates(conf, par):
         os.path.join(par, name): jenv.get_template(name).render(conf)
         for name in jenv.list_templates()
     }
-    configs[par + '.yaml'] = yaml.dump(conf, default_flow_style=False)
+    configs[par + '.yaml'] = yaml.dump(obfuscate_secrets(conf),
+                                       default_flow_style=False)
     return configs
 
 
