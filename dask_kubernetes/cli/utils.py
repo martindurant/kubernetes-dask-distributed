@@ -164,7 +164,7 @@ def obfuscate(val):
 def obfuscate_secrets(conf):
     # don't sensitive show regsecrets in config
     conf = copy.deepcopy(conf)
-    if 'regsecret' in conf:
+    if 'regsecret' in conf and conf['regsecret']:
         conf['regsecret']['username'] = obfuscate(conf['regsecret']['username'])
         conf['regsecret']['password'] = obfuscate(conf['regsecret']['password'])
     if 'secrets' in conf:

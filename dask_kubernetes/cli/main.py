@@ -62,30 +62,12 @@ def cli(ctx, verbose):
               help="Don't wait for kubernetes to respond")
 def create(ctx, name, settings_file, set, nowait):
     conf = get_conf(settings_file, set)
-    zone = conf['cluster']['zone']
-    call("gcloud config set compute/zone {0}".format(zone))
-    call("gcloud config set compute/region {0}".format(zone.rsplit('-', 1)[0]))
-
-    if conf['cluster']['autoscaling']:
-        autoscaling = (
-            '--enable-autoscaling --min-nodes={min} --max-nodes={max}'.format(
-                min=conf['cluster']['min_nodes'],
-                max=conf['cluster']['max_nodes']))
+    if not name == 'minikube':
+        setup_gcloud_container_cluster(conf, name)
     else:
-        autoscaling = ''
-    if conf['cluster']['preemptible']:
-        preemptible = '--preemptible'
-    else:
-        preemptible = ''
-    call("gcloud container clusters create {0} --num-nodes {1} --machine-type"
-         " {2} --no-async --disk-size {3} {autoscaling} {preemptible} --tags=dask --scopes "
-         "https://www.googleapis.com/auth/cloud-platform".format(
-            name, conf['cluster']['num_nodes'], conf['cluster']['machine_type'],
-            conf['cluster']['disk_size'],
-            autoscaling=autoscaling,
-            preemptible=preemptible))
-    get_credentials(name)
+        call('minikube start')
     context = get_context_from_cluster(name)
+    time.sleep(5)
     # specify label for notebook and scheduler
     out = json.loads(check_output('kubectl get nodes --output=json'
                                  ' --context ' + context))
@@ -117,6 +99,31 @@ def create(ctx, name, settings_file, set, nowait):
     if not nowait:
         wait_until_ready(name, context)
         print_info(name, context)
+
+
+def setup_gcloud_container_cluster(conf, name):
+    zone = conf['cluster']['zone']
+    call("gcloud config set compute/zone {0}".format(zone))
+    call("gcloud config set compute/region {0}".format(zone.rsplit('-', 1)[0]))
+    if conf['cluster']['autoscaling']:
+        autoscaling = (
+            '--enable-autoscaling --min-nodes={min} --max-nodes={max}'.format(
+                min=conf['cluster']['min_nodes'],
+                max=conf['cluster']['max_nodes']))
+    else:
+        autoscaling = ''
+    if conf['cluster']['preemptible']:
+        preemptible = '--preemptible'
+    else:
+        preemptible = ''
+    call("gcloud container clusters create {0} --num-nodes {1} --machine-type"
+         " {2} --no-async --disk-size {3} {autoscaling} {preemptible} --tags=dask --scopes "
+         "https://www.googleapis.com/auth/cloud-platform".format(
+        name, conf['cluster']['num_nodes'], conf['cluster']['machine_type'],
+        conf['cluster']['disk_size'],
+        autoscaling=autoscaling,
+        preemptible=preemptible))
+    get_credentials(name)
 
 
 def get_credentials(name):
@@ -239,6 +246,8 @@ def get_context_from_cluster(cluster):
     """
     output = check_output("kubectl config get-contexts -o name")
     contexts = output.strip().split('\n')
+    if cluster == 'minikube':
+        return 'minikube'
     for context in contexts:
         # Each context uses the format: gke_{PROJECT}_{ZONE}_{CLUSTER}
         if context.split('_')[-1] == cluster:
@@ -457,19 +466,22 @@ def delete(ctx, name):
     cmd = "kubectl delete services --all --context {0}".format(context)
     logger.info(cmd)
     call(cmd)
-    cmd = 'gcloud compute forwarding-rules list --format json'
-    logger.info(cmd)
-    out = check_output(cmd)
-    items = json.loads(out)
-    for item in items:
-        if item["IPAddress"] in [jupyter, scheduler]:
-            assert ('jupyter-notebook' in item['description'] or
-                    'dask-scheduler' in item['description'])
-            cmd = ('gcloud compute forwarding-rules delete ' +
-                   item['name'] + ' --region ' + zone)
-            logger.info(cmd)
-            call(cmd)
-    call("gcloud container clusters delete {0}".format(name))
+    if name == 'minikube':
+        call('minikube delete')
+    else:
+        cmd = 'gcloud compute forwarding-rules list --format json'
+        logger.info(cmd)
+        out = check_output(cmd)
+        items = json.loads(out)
+        for item in items:
+            if item["IPAddress"] in [jupyter, scheduler]:
+                assert ('jupyter-notebook' in item['description'] or
+                        'dask-scheduler' in item['description'])
+                cmd = ('gcloud compute forwarding-rules delete ' +
+                       item['name'] + ' --region ' + zone)
+                logger.info(cmd)
+                call(cmd)
+        call("gcloud container clusters delete {0}".format(name))
 
 if __name__ == '__main__':
     start()
