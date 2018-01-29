@@ -96,7 +96,7 @@ def create(ctx, name, settings_file, set, nowait):
         )
     for config_path in config_files:
         call("kubectl create -f {0}  --save-config".format(config_path))
-    if not nowait:
+    if not nowait and name != 'minikube':
         wait_until_ready(name, context)
         print_info(name, context)
 
