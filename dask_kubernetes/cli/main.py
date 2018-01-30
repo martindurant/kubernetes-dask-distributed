@@ -61,6 +61,9 @@ def cli(ctx, verbose):
 @click.option('--nowait', '-n', default=False, is_flag=True,
               help="Don't wait for kubernetes to respond")
 def create(ctx, name, settings_file, set, nowait):
+    if name == 'minikube' and not settings_file:
+        settings_file = os.path.abspath(os.path.join(os.path.dirname(__file__),
+                                                     'defaults.minikube.yaml'))
     conf = get_conf(settings_file, set)
     if not name == 'minikube':
         setup_gcloud_container_cluster(conf, name)
