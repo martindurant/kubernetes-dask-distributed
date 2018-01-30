@@ -1,12 +1,16 @@
 import collections
+import copy
 import functools
+import json
 from math import ceil
 import jinja2
 import logging
 import os
 import subprocess
 import sys
+
 import yaml
+from base64 import b64encode
 
 import six
 
@@ -126,6 +130,47 @@ def get_conf(settings, args=None):
         conf['workers']['memory_per_worker']))
     conf['workers']['cpus_per_worker2'] = int(ceil(
         float(conf['workers']['cpus_per_worker'])))
+
+    # encode secrets with base64
+    conf['secrets'] = conf.get('secrets', None) or {}
+    for key, secret in conf['secrets'].items():
+        secret = maybe_render_from_env(key, secret)
+        conf['secrets'][key] = b64encode(secret.encode()).decode()
+
+    # default value for regsecret
+    conf['regsecret'] = conf.get('regsecret', None)
+    if conf['regsecret'] is not None:
+        allowed_regsecret_keys = {'username', 'password', 'server', 'email'}
+        regsecret_keys = set(conf['regsecret'].keys())
+        if allowed_regsecret_keys != regsecret_keys:
+            raise ValueError('Forbidden additional keys in regsecret: {}'
+                             .format(allowed_regsecret_keys - regsecret_keys))
+    return conf
+
+
+def maybe_render_from_env(key, secret):
+    if secret.startswith('$'):
+        secret = check_output('echo "{}"'.format(secret)).strip()
+        if secret == '':
+            logger.warning('Secret with key {} evaluated '
+                           'to empty string'.format(key))
+    return secret
+
+
+def obfuscate(val):
+    return val[:2] + ('*' * (len(val)-2))
+
+
+def obfuscate_secrets(conf):
+    # don't sensitive show regsecrets in config
+    conf = copy.deepcopy(conf)
+    if 'regsecret' in conf and conf['regsecret']:
+        conf['regsecret']['username'] = obfuscate(conf['regsecret']['username'])
+        conf['regsecret']['password'] = obfuscate(conf['regsecret']['password'])
+    if 'secrets' in conf:
+        # don't show secrets
+        for k, v in conf['secrets'].items():
+            conf['secrets'][k] = obfuscate(v)
     return conf
 
 
@@ -145,7 +190,8 @@ def render_templates(conf, par):
         os.path.join(par, name): jenv.get_template(name).render(conf)
         for name in jenv.list_templates()
     }
-    configs[par + '.yaml'] = yaml.dump(conf, default_flow_style=False)
+    configs[par + '.yaml'] = yaml.dump(obfuscate_secrets(conf),
+                                       default_flow_style=False)
     return configs
 
 

@@ -33,5 +33,9 @@ spec:
               cpu: {{scheduler.cpus}}
               memory: {{scheduler.memory}}
           imagePullPolicy: Always
+    {% if regsecret != None %}
+      imagePullSecrets:
+      - name: regsecret
+    {% endif %}
       nodeSelector:
         dask_main: "thisone"

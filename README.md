@@ -236,6 +236,17 @@ It is, of course, also possible to run shell commands directly in the Jupyter
 notebook, or to use python's `subprocess` with dask's `Client.run` to
 programmatically call commands on the worker containers.
 
+#### Secrets
+You can specify secrets in your settings file. This secrets will be available in your 
+workers environment on the cluster.
+
+```yaml
+...
+secrets:
+    USERNAME: user
+    PASSWORD: $PASSWORD
+```
+
 ### Alternate docker image
 
 Each type of pod in dask-kubernetes currently is founded on the docker image

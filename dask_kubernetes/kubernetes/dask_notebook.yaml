@@ -32,5 +32,9 @@ spec:
           securityContext:
             runAsUser: 1000
           workingDir: /work
+    {% if regsecret != None %}
+      imagePullSecrets:
+      - name: regsecret
+    {% endif %}
       nodeSelector:
         dask_main: "thisone"

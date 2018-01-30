@@ -12,10 +12,11 @@ import sys
 import time
 import traceback
 import webbrowser
+from glob import glob
 
 from .config import setup_logging
 from .utils import (call, check_output, required_commands, get_conf, makedirs,
-                    render_templates, write_templates, pardir, load_config)
+                    render_templates, write_templates, pardir, load_config, maybe_render_from_env)
 
 
 logger = logging.getLogger(__name__)
@@ -60,11 +61,53 @@ def cli(ctx, verbose):
 @click.option('--nowait', '-n', default=False, is_flag=True,
               help="Don't wait for kubernetes to respond")
 def create(ctx, name, settings_file, set, nowait):
+    if name == 'minikube' and not settings_file:
+        settings_file = os.path.abspath(os.path.join(os.path.dirname(__file__),
+                                                     'defaults.minikube.yaml'))
     conf = get_conf(settings_file, set)
+    if not name == 'minikube':
+        setup_gcloud_container_cluster(conf, name)
+    else:
+        call('minikube start')
+    context = get_context_from_cluster(name)
+    time.sleep(5)
+    # specify label for notebook and scheduler
+    out = json.loads(check_output('kubectl get nodes --output=json'
+                                 ' --context ' + context))
+    node0 = out['items'][0]['metadata']['name']
+    call('kubectl label nodes {} dask_main=thisone'.format(node0))
+    par = pardir(name)
+    shutil.rmtree(par, True)
+    conf['context'] = context
+    logger.info("Copying template config to %s" % par)
+    makedirs(par, exist_ok=True)
+    write_templates(render_templates(conf, par))
+    config_files = glob(os.path.join(par, '*.yaml'))
+
+    # create secrets first then rest of the components
+    if len(conf['secrets']):
+        call("kubectl create -f {0}/secrets.yaml  --save-config".format(par))
+        config_files.remove('{0}/secrets.yaml'.format(par))
+    if conf['regsecret'] is not None:
+        regsecret_data = {k: maybe_render_from_env(k, v)
+                          for k, v in conf['regsecret'].items()}
+        logger.info("Creating regsecret with username {}"
+                    .format(regsecret_data['username']))
+        call('kubectl create secret docker-registry regsecret --docker-server="{server}"'
+             ' --docker-username={username} --docker-password={password} --docker-email={email}'
+            .format(**regsecret_data)
+        )
+    for config_path in config_files:
+        call("kubectl create -f {0}  --save-config".format(config_path))
+    if not nowait and name != 'minikube':
+        wait_until_ready(name, context)
+        print_info(name, context)
+
+
+def setup_gcloud_container_cluster(conf, name):
     zone = conf['cluster']['zone']
     call("gcloud config set compute/zone {0}".format(zone))
     call("gcloud config set compute/region {0}".format(zone.rsplit('-', 1)[0]))
-
     if conf['cluster']['autoscaling']:
         autoscaling = (
             '--enable-autoscaling --min-nodes={min} --max-nodes={max}'.format(
@@ -79,27 +122,11 @@ def create(ctx, name, settings_file, set, nowait):
     call("gcloud container clusters create {0} --num-nodes {1} --machine-type"
          " {2} --no-async --disk-size {3} {autoscaling} {preemptible} --tags=dask --scopes "
          "https://www.googleapis.com/auth/cloud-platform".format(
-            name, conf['cluster']['num_nodes'], conf['cluster']['machine_type'],
-            conf['cluster']['disk_size'],
-            autoscaling=autoscaling,
-            preemptible=preemptible))
+        name, conf['cluster']['num_nodes'], conf['cluster']['machine_type'],
+        conf['cluster']['disk_size'],
+        autoscaling=autoscaling,
+        preemptible=preemptible))
     get_credentials(name)
-    context = get_context_from_cluster(name)
-    # specify label for notebook and scheduler
-    out = json.loads(check_output('kubectl get nodes --output=json'
-                                 ' --context ' + context))
-    node0 = out['items'][0]['metadata']['name']
-    call('kubectl label nodes {} dask_main=thisone'.format(node0))
-    par = pardir(name)
-    shutil.rmtree(par, True)
-    conf['context'] = context
-    logger.info("Copying template config to %s" % par)
-    makedirs(par, exist_ok=True)
-    write_templates(render_templates(conf, par))
-    call("kubectl create -f {0}  --save-config".format(par))
-    if not nowait:
-        wait_until_ready(name, context)
-        print_info(name, context)
 
 
 def get_credentials(name):
@@ -222,6 +249,8 @@ def get_context_from_cluster(cluster):
     """
     output = check_output("kubectl config get-contexts -o name")
     contexts = output.strip().split('\n')
+    if cluster == 'minikube':
+        return 'minikube'
     for context in contexts:
         # Each context uses the format: gke_{PROJECT}_{ZONE}_{CLUSTER}
         if context.split('_')[-1] == cluster:
@@ -353,6 +382,27 @@ def counts(cluster):
     return nodes, pods
 
 
+@cli.command(short_help='Execute command on multiple pods')
+@click.pass_context
+@click.argument('cluster', required=True)
+@click.argument('pattern', default='.*')
+@click.argument('command', required=True)
+def podexec(ctx, cluster, pattern, command, dryrun):
+    context = get_context_from_settings(cluster)
+    live_pods, _ = get_pods(context)
+    live_pods = [item for sublist in live_pods.values() for item in sublist]
+    exec_pods = filter(lambda x: bool(re.match(pattern , x)), live_pods)
+
+    for pod in exec_pods:
+        logger.info('Executing command in {}'.format(pod))
+        if not dryrun:
+            out = check_output('kubectl --context {context} exec --pod {pod} {cmd}'
+                               .format(context=context,
+                                       pod=pod,
+                                       cmd=command))
+            logger.info(out)
+
+
 @cli.command(short_help='Open the remote kubernetes console in the browser')
 @click.pass_context
 @click.argument('cluster', required=True)
@@ -419,19 +469,22 @@ def delete(ctx, name):
     cmd = "kubectl delete services --all --context {0}".format(context)
     logger.info(cmd)
     call(cmd)
-    cmd = 'gcloud compute forwarding-rules list --format json'
-    logger.info(cmd)
-    out = check_output(cmd)
-    items = json.loads(out)
-    for item in items:
-        if item["IPAddress"] in [jupyter, scheduler]:
-            assert ('jupyter-notebook' in item['description'] or
-                    'dask-scheduler' in item['description'])
-            cmd = ('gcloud compute forwarding-rules delete ' +
-                   item['name'] + ' --region ' + zone)
-            logger.info(cmd)
-            call(cmd)
-    call("gcloud container clusters delete {0}".format(name))
+    if name == 'minikube':
+        call('minikube delete')
+    else:
+        cmd = 'gcloud compute forwarding-rules list --format json'
+        logger.info(cmd)
+        out = check_output(cmd)
+        items = json.loads(out)
+        for item in items:
+            if item["IPAddress"] in [jupyter, scheduler]:
+                assert ('jupyter-notebook' in item['description'] or
+                        'dask-scheduler' in item['description'])
+                cmd = ('gcloud compute forwarding-rules delete ' +
+                       item['name'] + ' --region ' + zone)
+                logger.info(cmd)
+                call(cmd)
+        call("gcloud container clusters delete {0}".format(name))
 
 if __name__ == '__main__':
     start()

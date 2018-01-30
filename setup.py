@@ -25,7 +25,11 @@ setup(name="dask-kubernetes",
       ],
       packages=['dask_kubernetes'],
       package_dirs={'dask_kubernetes': ['dask_kubernetes']},
-      install_requires=['click'],
+      install_requires=[
+          'click',
+          'jinja2',
+          'pyaml'
+      ],
       zip_safe=False,
       package_data={'kubernetes': ['*.yaml']},
       include_package_data=True,
