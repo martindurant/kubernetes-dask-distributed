@@ -1,5 +1,5 @@
 FROM ubuntu:16.04
-MAINTAINER Martin Durant <martin.durant@utoronto.ca>
+MAINTAINER Kyle Foreman <kfor@uw.edu>
 
 RUN apt-get update -yqq && apt-get install -yqq bzip2 git wget graphviz && rm -rf /var/lib/apt/lists/*
 
@@ -35,11 +35,17 @@ RUN conda install -c bokeh bokeh \
  && jupyter labextension install jupyterlab_bokeh \
  && conda clean -tipsy
 
-RUN npm cache clean
+RUN npm cache clean --force
 
 # Optional: Install the master branch of distributed and dask
 RUN pip install git+https://github.com/dask/dask --upgrade --no-deps
 RUN pip install git+https://github.com/dask/distributed --upgrade --no-deps
+
+# Install xarray from master
+RUN pip install git+https://github.com/pydata/xarray --upgrade
+
+# Install zarr backend from master
+RUN pip install git+https://github.com/zarr-developers/zarr --upgrade
 
 # Install Tini that necessary to properly run the notebook service in docker
 # http://jupyter-notebook.readthedocs.org/en/latest/public_server.html#docker-cmd
