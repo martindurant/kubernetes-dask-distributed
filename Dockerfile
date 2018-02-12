@@ -40,7 +40,7 @@ RUN conda install -c bokeh bokeh \
 # Optional: Install the master branch of distributed and dask
 RUN pip install git+https://github.com/dask/dask --upgrade --no-deps \
  && pip install git+https://github.com/dask/distributed --upgrade --no-deps \
- && pip install git+https://github.com/dask/gcsfs --upgrade --no-deps \
+ && pip install git+https://github.com/dask/gcsfs --upgrade \
  && pip install git+https://github.com/pydata/xarray --upgrade \
  && pip install git+https://github.com/zarr-developers/zarr --upgrade
 
