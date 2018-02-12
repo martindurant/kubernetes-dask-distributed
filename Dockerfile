@@ -29,6 +29,7 @@ RUN conda install -c conda-forge nodejs
 RUN conda install -c conda-forge jupyterlab jupyter_dashboards ipywidgets \
  && jupyter labextension install @jupyter-widgets/jupyterlab-manager \
  && jupyter nbextension enable jupyter_dashboards --py --sys-prefix \
+ && jupyter nbextension enable widgetsnbextension --py --sys-prefix \
  && conda clean -tipsy
 
 RUN conda install -c bokeh bokeh \
