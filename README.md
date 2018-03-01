@@ -1,12 +1,14 @@
-# Kubernetes provisioning of a Dask Distributed cluster
+# Google Container Engine provisioning of a Dask Distributed cluster
+
+*Historical Note: this repository is somewhat old and not actively maintained.
+For more general documentation on deploying Dask on Kubernetes or Cloud
+clusters we recommend referring to the
+[Dask setup documentation](http://dask.pydata.org/en/latest/setup.html)*
 
 This repo hosts some sample configuration to set up Kubernetes containerized
 environments for interactive cluster computing in Python with [Jupyter
-notebook](http://jupyter.org/) [dask](http://dask.pydata.org/)
-and other tools from the PyData and SciPy
-ecosystems.
-
-*This is a work in progress*
+notebook](http://jupyter.org/) [Dask](http://dask.pydata.org/)
+and other tools from the PyData and SciPy ecosystems.
 
 The Kubernetes API is provided as a managed service by the following public cloud
 providers:
@@ -17,7 +19,7 @@ providers:
 - [Amazon Elastic Container Service for Kubernetes ](https://aws.amazon.com/eks/)
 
 Alternatively it is possible to [install and manage Kubernetes by
-your-self](http://kubernetes.io/docs/getting-started-guides/).
+yourself](http://kubernetes.io/docs/getting-started-guides/).
 
 We will briefly describe usage assuming Google Container Engine (GKE).
 
