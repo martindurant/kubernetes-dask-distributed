@@ -4,7 +4,6 @@ import click
 import json
 import logging
 from math import ceil
-import os
 import re
 import shutil
 import subprocess
@@ -76,18 +75,38 @@ def create(ctx, name, settings_file, set, nowait):
         preemptible = '--preemptible'
     else:
         preemptible = ''
-    call("gcloud container clusters create {0} --num-nodes {1} --machine-type"
-         " {2} --no-async --disk-size {3} {autoscaling} {preemptible} --tags=dask --scopes "
-         "https://www.googleapis.com/auth/cloud-platform".format(
-            name, conf['cluster']['num_nodes'], conf['cluster']['machine_type'],
-            conf['cluster']['disk_size'],
+
+    if conf['gce']['scopes']:
+        scopes = conf['gce']['scopes']
+    else:
+        scopes = "https://www.googleapis.com/auth/cloud-platform"
+    """
+    Settings not yet specified:
+        * enable-cloud-logging
+        * enable-cloud-monitoring
+        * enable-ip-alias
+        * network
+        * subnetwork
+        * addons
+        * enable-autoupgrade
+        * enable-autorepair
+    """
+    call("gcloud container clusters create {name} --num-nodes {numnodes} --machine-type"
+         " {machinetype} --no-async --disk-size {disksize} {autoscaling} {preemptible} --tags=dask --scopes {scopes}"
+         "".format(
+            name=name,
+            numnodes=conf['cluster']['num_nodes'],
+            machinetype=conf['cluster']['machine_type'],
+            disksize=conf['cluster']['disk_size'],
             autoscaling=autoscaling,
-            preemptible=preemptible))
+            preemptible=preemptible,
+            scopes=scopes,
+         ))
     get_credentials(name)
     context = get_context_from_cluster(name)
     # specify label for notebook and scheduler
-    out = json.loads(check_output('kubectl get nodes --output=json'
-                                 ' --context ' + context))
+    out = json.loads(
+        check_output('kubectl get nodes --output=json --context ' + context))
     node0 = out['items'][0]['metadata']['name']
     call('kubectl label nodes {} dask_main=thisone'.format(node0))
     par = pardir(name)
@@ -106,7 +125,7 @@ def get_credentials(name):
     try:
         subprocess.check_call("gcloud container clusters get-credentials {0}".
                               format(name), shell=True)
-    except:
+    except:  # noqa
         raise RuntimeError('Connecting to cluster failed!')
 
 
@@ -336,7 +355,7 @@ def get_pods(context):
                     live.setdefault(name, []).append(pod)
                 else:
                     dead.setdefault(name, []).append(pod)
-        except:
+        except:  # noqa
             continue
     return live, dead
 
@@ -432,6 +451,7 @@ def delete(ctx, name):
             logger.info(cmd)
             call(cmd)
     call("gcloud container clusters delete {0}".format(name))
+
 
 if __name__ == '__main__':
     start()
